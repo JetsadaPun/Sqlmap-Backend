@@ -1,8 +1,17 @@
 from flask import Blueprint, request, jsonify
 import subprocess
+import re
 
 test_api = Blueprint("test_api", __name__)
 
+TECHNIQUE_PATTERNS = {
+    "Boolean-Based Blind SQL Injection": r"Type:\s*boolean-based blind", 
+    "Time-Based Blind SQL Injection": r"Type:\s*time-based blind",        
+    "Error-Based SQL Injection": r"Type:\s*error-based",                 
+    "Union-Based SQL Injection": r"Type:\s*UNION query",                  
+    "Stacked Queries SQL Injection": r"Type:\s*stacked queries",          
+    "Inline Query SQL Injection": r"Type:\s*inline query",                
+}
 @test_api.route('/api/test-url', methods=['POST'])
 def test_url():
     data = request.get_json()
@@ -29,4 +38,9 @@ def test_url():
         result = ""
         log = f"An error occurred: {e}"
 
-    return jsonify({"result": result, "log": log})
+    detected_techniques = []
+    for technique, pattern in TECHNIQUE_PATTERNS.items():
+        if re.search(pattern, result, re.IGNORECASE):
+            detected_techniques.append(technique)
+            
+    return jsonify({"result": result, "log": log,"techniques": detected_techniques})
