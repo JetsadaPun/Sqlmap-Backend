@@ -41,10 +41,8 @@ def test_url():
             check=True  
         )
         result = output.stdout
-        log = output.stderr
     except subprocess.CalledProcessError as e:
         result = ""
-        log = f"An error occurred: {e}"
 
     # ตรวจจับเทคนิคที่พบ
     detected_techniques = [tech for tech, pattern in TECHNIQUE_PATTERNS.items() if re.search(pattern, result, re.IGNORECASE)]
@@ -87,20 +85,39 @@ def boolean_base():
     
     # Extract input data
     url = data.get('url')
-    technique = data.get('technique', '').upper() # B E U S T Q
-
-    # Validate input
-    if not url or technique not in ['B', 'E', 'T', 'U','S', 'Q']:
-        return jsonify({"error": "Valid URL and technique (B, E, T, U, 'S', 'Q') are required"}), 400
-    
+    techniques = data.get('techniques', '').upper().split(',')
+    results = []
     # Build SQLMap command
-    mapcommand = ['python','sqlmap', '-u', url, f'--technique={technique}', '--batch']
+    for technique in techniques:
+        # สร้างคำสั่ง SQLMap
+        print('sqlmap', '-u', url, f'--technique={technique}', '--batch')
+        mapcommand = ['sqlmap', '-u', url, f'--technique={technique}', '--batch']
 
-    try:
-        result = subprocess.run(mapcommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        return jsonify({"output": result.stdout})
-    except FileNotFoundError:
-        return jsonify({"error": "SQLMap not found. Ensure it is installed"}), 500
+        try:
+            result = subprocess.run(mapcommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            output = result.stdout
+
+            # 🔍 ดึงข้อมูลที่ตรงกับ pattern
+            vulnerable_param_match = re.search(VULNERABLE_PARAM_PATTERN, output)
+            payload_match = re.findall(PAYLOAD_PATTERN, output)
+            dbms_match = re.search(DBMS_PATTERN, output)
+            web_tech_match = re.search(WEB_TECH_PATTERN, output)
+            server_os_match = re.search(SERVER_OS_PATTERN, output)
+
+            results.append({
+                "technique": technique,  # บันทึกเทคนิคที่ใช้
+                "vulnerable_param": vulnerable_param_match.group(1) if vulnerable_param_match else None,
+                "parameter_type": vulnerable_param_match.group(2) if vulnerable_param_match else None,
+                "payloads": payload_match if payload_match else None,
+                "dbms": dbms_match.group(1) if dbms_match else None,
+                "web_technology": web_tech_match.group(1) if web_tech_match else None,
+                "server_os": server_os_match.group(1) if server_os_match else None,
+            })
+
+        except FileNotFoundError:
+            return jsonify({"error": "SQLMap not found. Ensure it is installed"}), 500
+
+    return jsonify({"results": results})  # ส่งข้อมูลกลับเป็น JSON Array
     
 @test_api.route('/api/contact', methods=['POST'])
 def contact():
